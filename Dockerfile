@@ -1,67 +1,64 @@
-# ── Dockerfile ──
+# Use official Node.js LTS runtime as base image
+FROM node:18-slim
 
-# 1. Base image: a minimal Node 20 install
-FROM node:20-slim
-
-# 2. Install all of Playwright’s Linux dependencies in one apt-get step.
-#    In particular, note the inclusion of libxkbcommon0 (for libxkbcommon.so.0).
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      ca-certificates \
-      fonts-liberation \
-      libasound2 \
-      libatk-bridge2.0-0 \
-      libatk1.0-0 \
-      libc6 \
-      libcairo2 \
-      libcurl4 \
-      libcups2 \
-      libdbus-1-3 \
-      libexpat1 \
-      libfontconfig1 \
-      libgcc1 \
-      libglib2.0-0 \
-      libgtk-3-0 \
-      libnss3 \
-      libx11-6 \
-      libx11-xcb1 \
-      libxcb1 \
-      libxcomposite1 \
-      libxcursor1 \
-      libxdamage1 \
-      libxext6 \
-      libxfixes3 \
-      libxrandr2 \
-      libxrender1 \
-      libxss1 \
-      libxtst6 \
-      libxkbcommon0 \
-      libgbm1 \
-      libpangocairo-1.0-0 \
-      libpangocairo-1.0-0 \
-      wget \
-      xvfb \
-      lsb-release \
-      fonts-noto-color-emoji \
+# Install dependencies needed for Playwright and Chromium
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    ca-certificates \
+    procps \
+    libxss1 \
+    libgconf-2-4 \
+    libxrandr2 \
+    libasound2 \
+    libpangocairo-1.0-0 \
+    libatk1.0-0 \
+    libcairo-gobject2 \
+    libgtk-3-0 \
+    libgdk-pixbuf2.0-0 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrender1 \
+    libxtst6 \
+    libdrm2 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    fonts-liberation \
+    libnss3 \
+    lsb-release \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Create app directory and copy package files
+# Set working directory
 WORKDIR /app
-COPY package.json yarn.lock ./
 
-# 4. Install your Node dependencies (including playwright)
-RUN yarn install --frozen-lockfile
+# Copy package files
+COPY package*.json ./
 
-# 5. Copy the rest of your source code
+# Install Node.js dependencies
+RUN npm ci --only=production
+
+# Install Playwright browsers
+RUN npx playwright install chromium
+
+# Copy application files
 COPY . .
 
-# 6. (Optional but recommended) Pre-install Playwright browsers & verify dependencies:
-#    This downloads Chromium, WebKit, and Firefox at build time, ensuring they’re
-#    present in the final image.
-RUN npx playwright install --with-deps
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN chown -R appuser:appuser /app
+USER appuser
 
-# 7. Expose the port your server listens on (adjust if different)
-EXPOSE 3000
+# Set environment variables
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# 8. Launch command
+# Expose port (optional, for health checks)
+EXPOSE 8080
+
+# Command to run the application
 CMD ["node", "MapFetchServer.js"]
