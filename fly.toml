@@ -7,9 +7,21 @@ app = 'adwrnmap'
 primary_region = 'sin'
 
 [build]
+  image = node20
+
+
 
 [env]
   PORT = '8080'
+  NODE_ENV = production
+
+[processes]
+  script = node MapFetchServer.js
+
+[[statics]]
+  guest_path = app
+  url_prefix = 
+
 
 [http_service]
   internal_port = 8080
@@ -24,3 +36,8 @@ primary_region = 'sin'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
+
+
+[[cron]]
+  schedule = 0 5     # Runs every day at 0500 UTC
+  process = script
