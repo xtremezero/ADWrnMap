@@ -1,20 +1,22 @@
 # syntax = docker/dockerfile:1
 
-# Adjust NODE_VERSION if you want a different Node.js
+# ─── ARG & BASE IMAGE ──────────────────────────────────────────────────────────
 ARG NODE_VERSION=20.18.0
 FROM node:${NODE_VERSION}-slim AS base
 
 LABEL fly_launch_runtime="NodeJS"
-
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Instruct Playwright to place its browser binaries under /app/.cache/ms-playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
 
 #
 # ─── BUILD STAGE ────────────────────────────────────────────────────────────────
 #
 FROM base AS build
 
-# Install Debian packages that Playwright needs (and build tools for native modules)
+# Install Debian packages needed for native modules AND Playwright
 RUN apt-get update -qq && \
     apt-get install -y \
       python-is-python3 \
@@ -57,10 +59,10 @@ RUN apt-get update -qq && \
 COPY --link package.json package-lock.json ./
 RUN npm ci
 
-# Install Playwright browsers (with all system dependencies)
+# Download Playwright browsers (they’ll end up under /app/.cache/ms-playwright)
 RUN npx playwright install --with-deps
 
-# Copy the rest of your application code
+# Copy the rest of the application (including your MapFetchServer.js)
 COPY --link . .
 
 #
@@ -68,7 +70,7 @@ COPY --link . .
 #
 FROM base
 
-# Re-install runtime dependencies so Playwright can run
+# Re-install runtime-only libraries so that Chromium can launch at runtime
 RUN apt-get update -qq && \
     apt-get install -y \
       libnss3 \
@@ -104,12 +106,13 @@ RUN apt-get update -qq && \
       ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy built application (including node_modules and Playwright browsers) from build
+# Copy everything (code, node_modules, and the cached browsers) from build
 COPY --from=build /app /app
 
 WORKDIR /app
 
-# Make sure your package.json has:
-#    "scripts": { "start": "node MapFetchServer.js" }
-#
+# Ensure the same PLAYWRIGHT_BROWSERS_PATH is set at runtime
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+
+# Run your MapFetchServer.js
 CMD ["npm", "run", "start"]
