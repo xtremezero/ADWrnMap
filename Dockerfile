@@ -51,7 +51,7 @@ RUN apt-get update -qq && \
       libjpeg-dev \
       libpng-dev \
       libxss1 \
-      libxkbcommon0 \          # ← Ensure this is present at build too
+      libxkbcommon0 \
       wget \
       ca-certificates && \
     rm -rf /var/lib/apt/lists/*
@@ -103,7 +103,7 @@ RUN apt-get update -qq && \
       libjpeg-dev \
       libpng-dev \
       libxss1 \
-      libxkbcommon0 \          # ← Add this so chromium_headless_shell can load libxkbcommon.so.0
+      libxkbcommon0 \
       wget \
       ca-certificates && \
     rm -rf /var/lib/apt/lists/*
