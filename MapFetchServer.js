@@ -1,8 +1,8 @@
-const playwright = require('playwright');
+const { chromium } = require('playwright');
 
 function getCurrentUtcTimestamp() {
   const now = new Date();
-  return now.toISOString().slice(0, 16).replace(/[-T:]/g, '').slice(0, 12); 
+  return now.toISOString().slice(0, 16).replace(/[-T:]/g, '').slice(0, 12);
   // Format YYYYMMDDHHMM (UTC) - simplified version
 }
 
@@ -52,52 +52,65 @@ function extractPolygonsBySeverity(json) {
   const timestampStr = getCurrentUtcTimestamp();
   const timestampDate = parseTimestamp(timestampStr);
   const urlPattern = /\/ncm-api\/warnings\/gis\?TIMESTAMP=(\d{12})/;
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
 
-  const browser = await playwright.chromium.launch({ headless: true });
-  const page = await browser.newPage();
 
-  let capturedResponse = null;
+    let capturedResponse = null;
 
-  page.on('response', async response => {
-    const url = response.url();
-    const match = url.match(urlPattern);
-    if (match) {
-      const tsInUrl = match[1];
-      const tsDate = parseTimestamp(tsInUrl);
-      const deltaSeconds = Math.abs((tsDate - timestampDate) / 1000);
-      if (deltaSeconds <= 300) { // within 5 minutes
-        try {
-          const json = await response.json();
-          console.log(`✅ Captured response with timestamp ${tsInUrl}`);
-          capturedResponse = json;
-        } catch (e) {
-          console.log(`Failed to parse JSON from ${url}: ${e}`);
+    page.on('response', async response => {
+      const url = response.url();
+      const match = url.match(urlPattern);
+      if (match) {
+        const tsInUrl = match[1];
+        const tsDate = parseTimestamp(tsInUrl);
+        const deltaSeconds = Math.abs((tsDate - timestampDate) / 1000);
+        if (deltaSeconds <= 300) { // within 5 minutes
+          try {
+            const json = await response.json();
+            console.log(`✅ Captured response with timestamp ${tsInUrl}`);
+            capturedResponse = json;
+          } catch (e) {
+            console.log(`Failed to parse JSON from ${url}: ${e}`);
+          }
         }
       }
+    });
+
+    await page.goto('https://www.ncm.gov.ae/maps-warnings?lang=en');
+    await page.waitForSelector('a.layer-group[data-id="group-warnings"]', { timeout: 10000 });
+    await page.click('a.layer-group[data-id="group-warnings"]');
+
+    // Wait to catch the request
+    await page.waitForTimeout(12000);
+
+    if (!capturedResponse) {
+      console.log('❌ No matching API response captured.');
+    } else {
+      const severityPolygons = extractPolygonsBySeverity(capturedResponse);
+
+      console.log('\n--- Polygons grouped by severity ---');
+      for (const severity in severityPolygons) {
+        const polygons = severityPolygons[severity];
+        console.log(`\nSeverity level ${severity}: ${polygons.length} polygon(s)`);
+        polygons.forEach((polygon, i) => {
+          console.log(` Polygon ${i + 1}:`, polygon);
+        });
+      }
     }
-  });
 
-  await page.goto('https://www.ncm.gov.ae/maps-warnings?lang=en');
-  await page.waitForSelector('a.layer-group[data-id="group-warnings"]', { timeout: 10000 });
-  await page.click('a.layer-group[data-id="group-warnings"]');
-
-  // Wait to catch the request
-  await page.waitForTimeout(12000);
-
-  if (!capturedResponse) {
-    console.log('❌ No matching API response captured.');
-  } else {
-    const severityPolygons = extractPolygonsBySeverity(capturedResponse);
-
-    console.log('\n--- Polygons grouped by severity ---');
-    for (const severity in severityPolygons) {
-      const polygons = severityPolygons[severity];
-      console.log(`\nSeverity level ${severity}: ${polygons.length} polygon(s)`);
-      polygons.forEach((polygon, i) => {
-        console.log(` Polygon ${i + 1}:`, polygon);
-      });
-    }
+    await browser.close();
+    console.log('Playwright launched Chromium successfully.');
+  }
+  catch (err) {
+    console.error('⚠️  Failed to launch Playwright Chromium:', err);
+    // If you want the process to exit in production so Fly.io restarts it:
+    process.exit(1);
   }
 
-  await browser.close();
+
+
 })();
+

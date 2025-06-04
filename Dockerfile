@@ -1,120 +1,67 @@
-# syntax = docker/dockerfile:1
+# ── Dockerfile ──
 
-# ─── ARG & BASE IMAGE ──────────────────────────────────────────────────────────
-ARG NODE_VERSION=20.18.0
-FROM node:${NODE_VERSION}-slim AS base
+# 1. Base image: a minimal Node 20 install
+FROM node:20-slim
 
-LABEL fly_launch_runtime="NodeJS"
-WORKDIR /app
-ENV NODE_ENV=production
-
-# Instruct Playwright to place its browser binaries under /app/.cache/ms-playwright
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
-
-#
-# ─── BUILD STAGE ────────────────────────────────────────────────────────────────
-#
-FROM base AS build
-
-# Install Debian packages needed for native modules AND Playwright
-RUN apt-get update -qq && \
-    apt-get install -y \
-      python-is-python3 \
-      pkg-config \
-      build-essential \
-      libnss3 \
-      libatk1.0-0 \
+# 2. Install all of Playwright’s Linux dependencies in one apt-get step.
+#    In particular, note the inclusion of libxkbcommon0 (for libxkbcommon.so.0).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      fonts-liberation \
+      libasound2 \
       libatk-bridge2.0-0 \
+      libatk1.0-0 \
+      libc6 \
+      libcairo2 \
+      libcurl4 \
+      libcups2 \
+      libdbus-1-3 \
+      libexpat1 \
+      libfontconfig1 \
+      libgcc1 \
+      libglib2.0-0 \
+      libgtk-3-0 \
+      libnss3 \
+      libx11-6 \
       libx11-xcb1 \
+      libxcb1 \
       libxcomposite1 \
       libxcursor1 \
       libxdamage1 \
       libxext6 \
       libxfixes3 \
       libxrandr2 \
-      libgbm-dev \
-      libpango-1.0-0 \
-      libpangocairo-1.0-0 \
-      libcups2 \
-      libdrm2 \
-      libasound2 \
-      libxshmfence1 \
-      libwayland-client0 \
-      libwayland-cursor0 \
-      libwayland-egl1 \
-      libegl1 \
-      libdbus-1-3 \
-      libfontconfig1 \
-      libfreetype6 \
-      libglib2.0-0 \
-      libharfbuzz0b \
-      libjpeg-dev \
-      libpng-dev \
+      libxrender1 \
       libxss1 \
+      libxtst6 \
       libxkbcommon0 \
+      libgbm1 \
+      libpangocairo-1.0-0 \
+      libpangocairo-1.0-0 \
       wget \
-      ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+      xvfb \
+      lsb-release \
+      fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json + lockfile, install dependencies
-COPY --link package.json package-lock.json ./
-RUN npm ci
+# 3. Create app directory and copy package files
+WORKDIR /app
+COPY package.json yarn.lock ./
 
-# Download Playwright browsers (they’ll end up under /app/.cache/ms-playwright)
+# 4. Install your Node dependencies (including playwright)
+RUN yarn install --frozen-lockfile
+
+# 5. Copy the rest of your source code
+COPY . .
+
+# 6. (Optional but recommended) Pre-install Playwright browsers & verify dependencies:
+#    This downloads Chromium, WebKit, and Firefox at build time, ensuring they’re
+#    present in the final image.
 RUN npx playwright install --with-deps
 
-# Copy the rest of the application (including your MapFetchServer.js)
-COPY --link . .
+# 7. Expose the port your server listens on (adjust if different)
+EXPOSE 3000
 
-#
-# ─── FINAL IMAGE ────────────────────────────────────────────────────────────────
-#
-FROM base
-
-# Re‐install runtime-only libraries so that Chromium can launch at runtime
-RUN apt-get update -qq && \
-    apt-get install -y \
-      libnss3 \
-      libatk1.0-0 \
-      libatk-bridge2.0-0 \
-      libx11-xcb1 \
-      libxcomposite1 \
-      libxcursor1 \
-      libxdamage1 \
-      libxext6 \
-      libxfixes3 \
-      libxrandr2 \
-      libgbm-dev \
-      libpango-1.0-0 \
-      libpangocairo-1.0-0 \
-      libcups2 \
-      libdrm2 \
-      libasound2 \
-      libxshmfence1 \
-      libwayland-client0 \
-      libwayland-cursor0 \
-      libwayland-egl1 \
-      libegl1 \
-      libdbus-1-3 \
-      libfontconfig1 \
-      libfreetype6 \
-      libglib2.0-0 \
-      libharfbuzz0b \
-      libjpeg-dev \
-      libpng-dev \
-      libxss1 \
-      libxkbcommon0 \
-      wget \
-      ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy everything (code, node_modules, and the cached browsers) from build
-COPY --from=build /app /app
-
-WORKDIR /app
-
-# Ensure the same PLAYWRIGHT_BROWSERS_PATH is set at runtime
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
-
-# Run your MapFetchServer.js
-CMD ["npm", "run", "start"]
+# 8. Launch command
+CMD ["node", "MapFetchServer.js"]
