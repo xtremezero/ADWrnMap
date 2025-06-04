@@ -51,6 +51,7 @@ RUN apt-get update -qq && \
       libjpeg-dev \
       libpng-dev \
       libxss1 \
+      libxkbcommon0 \          # ← Ensure this is present at build too
       wget \
       ca-certificates && \
     rm -rf /var/lib/apt/lists/*
@@ -70,7 +71,7 @@ COPY --link . .
 #
 FROM base
 
-# Re-install runtime-only libraries so that Chromium can launch at runtime
+# Re‐install runtime-only libraries so that Chromium can launch at runtime
 RUN apt-get update -qq && \
     apt-get install -y \
       libnss3 \
@@ -102,6 +103,7 @@ RUN apt-get update -qq && \
       libjpeg-dev \
       libpng-dev \
       libxss1 \
+      libxkbcommon0 \          # ← Add this so chromium_headless_shell can load libxkbcommon.so.0
       wget \
       ca-certificates && \
     rm -rf /var/lib/apt/lists/*
