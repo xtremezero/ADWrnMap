@@ -1,63 +1,48 @@
-# Use official Node.js LTS runtime as base image
-FROM node:18-slim
+# Use Node.js 18 Alpine for smaller size
+FROM node:18-alpine
 
-# Install dependencies needed for Playwright and Chromium
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
+# Install system dependencies for Playwright
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
     ca-certificates \
-    procps \
-    libxss1 \
-    libgconf-2-4 \
-    libxrandr2 \
-    libasound2 \
-    libpangocairo-1.0-0 \
-    libatk1.0-0 \
-    libcairo-gobject2 \
-    libgtk-3-0 \
-    libgdk-pixbuf2.0-0 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrender1 \
-    libxtst6 \
-    libdrm2 \
-    libxkbcommon0 \
-    libatspi2.0-0 \
-    fonts-liberation \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+# Tell Playwright to skip additional browser downloads
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install Node.js dependencies
-RUN npm ci --only=production
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
 
-# Install Playwright browsers with system dependencies
-RUN npx playwright install --with-deps chromium
+# Install Playwright browsers
+RUN npx playwright install
 
-# Copy application files
-COPY . .
+# Copy application code
+COPY MapFetchServer.js ./
 
-# Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-RUN chown -R appuser:appuser /app
-USER appuser
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 -G nodejs
 
-# Set environment variables
-ENV NODE_ENV=production
+# Change ownership
+RUN chown -R nextjs:nodejs /app
 
-# Expose port (optional, for health checks)
-EXPOSE 8080
+# Switch to non-root user
+USER nextjs
 
-# Command to run the application
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "console.log('Health check passed')" || exit 1
+
+# Run the application
 CMD ["node", "MapFetchServer.js"]
