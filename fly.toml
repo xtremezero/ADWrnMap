@@ -1,5 +1,5 @@
 app = "ad-warning-map"
-primary_region = "dfw"
+primary_region = "sin"
 
 [build]
 

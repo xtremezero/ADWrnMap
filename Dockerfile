@@ -42,8 +42,8 @@ COPY package*.json ./
 # Install Node.js dependencies
 RUN npm ci --only=production
 
-# Install Playwright browsers
-RUN npx playwright install chromium
+# Install Playwright browsers with system dependencies
+RUN npx playwright install --with-deps chromium
 
 # Copy application files
 COPY . .
@@ -55,7 +55,6 @@ USER appuser
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Expose port (optional, for health checks)
 EXPOSE 8080
