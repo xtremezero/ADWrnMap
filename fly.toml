@@ -2,7 +2,7 @@ app = "adwrnmap"
 primary_region = "sin"
 
 [build]
-  image = "node:20"
+  image = "node20"
 
 [env]
   NODE_ENV = "production"
